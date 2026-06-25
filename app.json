@@ -38,6 +38,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SiteFlow AI uses your photos to attach evidence to construction issue reports.",
+          "cameraPermission": "SiteFlow AI uses your camera to capture photos of construction issues on site."
+        }
       ]
     ],
     "experiments": {
