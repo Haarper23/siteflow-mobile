@@ -35,6 +35,21 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
+## Testing
+
+Unit and component tests run on [Jest](https://jestjs.io) via the `jest-expo`
+preset with [React Native Testing Library](https://callstack.github.io/react-native-testing-library/).
+
+```bash
+npm test              # run the suite once (CI-friendly; exits when done)
+npm run test:watch    # re-run on change
+npm run test:coverage # run with a coverage report
+```
+
+Tests live in `__tests__/` folders (`utils/`, `storage/`, `context/`,
+`components/`), with shared typed fixtures in `__tests__/fixtures/`. They are
+never placed under `app/`, where Expo Router would treat them as routes.
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:
