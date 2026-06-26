@@ -99,7 +99,7 @@ export default function NewIssueScreen() {
     category?: string;
   }>();
 
-  const { addIssue, saveDraft, deleteDraft, getIssueById } = useIssues();
+  const { submitIssueFromDraft, saveDraft, getIssueById } = useIssues();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -333,16 +333,9 @@ export default function NewIssueScreen() {
 
     setIsSaving(true);
     try {
-      // If this report started life as a draft, remove that draft first so we
-      // do not leave a stale duplicate behind once it becomes a real issue.
-      if (draftId) {
-        const draft = getIssueById(draftId);
-        if (draft?.isDraft) {
-          await deleteDraft(draftId);
-        }
-      }
-
-      const created = await addIssue(payload);
+      // Atomically replace the originating draft (if any) with the submitted
+      // issue in a single update + persist, so no stale draft can resurrect.
+      const created = await submitIssueFromDraft(payload, draftId);
       committedRef.current = true;
       router.replace({ pathname: '/issues/[id]', params: { id: created.id } });
     } catch {

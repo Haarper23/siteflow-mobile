@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type {
@@ -59,6 +60,16 @@ interface DailyReportContextValue {
   isLoading: boolean;
   loadError: boolean;
   addReport: (form: DailyReportFormData) => Promise<DailySiteReport>;
+  /**
+   * Submits a finished daily report. When `draftId` refers to an existing
+   * draft, that draft is removed and replaced by the submitted record in a
+   * single atomic update + persist — preventing the draft-resurrection race.
+   * The draft's id and original `createdAt` are preserved.
+   */
+  submitReportFromDraft: (
+    form: DailyReportFormData,
+    draftId?: string,
+  ) => Promise<DailySiteReport>;
   saveDraft: (form: DailyReportFormData, draftId?: string) => Promise<DailySiteReport>;
   updateReport: (id: string, updates: Partial<DailySiteReport>) => Promise<void>;
   deleteDraft: (id: string) => Promise<void>;
@@ -127,31 +138,65 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  const persist = useCallback(async (next: DailySiteReport[]): Promise<void> => {
+  // Latest-state mirror (see IssueContext for the rationale): mutations build
+  // from this ref, advanced synchronously, so sequential writes never overwrite
+  // newer state with an older snapshot.
+  const reportsRef = useRef<DailySiteReport[]>([]);
+
+  const commit = useCallback((next: DailySiteReport[]) => {
+    reportsRef.current = next;
     setAllReports(next);
-    await saveDailyReports(next);
   }, []);
+
+  const persist = useCallback(
+    async (
+      build: (prev: DailySiteReport[]) => DailySiteReport[],
+    ): Promise<DailySiteReport[]> => {
+      const next = build(reportsRef.current);
+      commit(next);
+      await saveDailyReports(next);
+      return next;
+    },
+    [commit],
+  );
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setLoadError(false);
     try {
-      const stored = await loadDailyReports();
-      if (stored === null) {
-        // First launch: seed once. The null guard prevents re-seeding over user data.
-        setAllReports(MOCK_DAILY_REPORTS);
-        await saveDailyReports(MOCK_DAILY_REPORTS);
-      } else {
-        setAllReports(stored);
+      const result = await loadDailyReports();
+      switch (result.status) {
+        case 'empty':
+          // First launch only: seed once. Never re-seeds over user data.
+          commit(MOCK_DAILY_REPORTS);
+          try {
+            await saveDailyReports(MOCK_DAILY_REPORTS);
+          } catch {
+            // Seed stays in memory; re-persists on the next write.
+          }
+          break;
+        case 'ok':
+          commit(result.items);
+          if (result.migrated) {
+            try {
+              await saveDailyReports(result.items);
+            } catch {
+              // Non-fatal: valid in memory, re-persists on next write.
+            }
+          }
+          break;
+        default:
+          // malformed | unsupported | error — never seed or clear unreadable
+          // data; surface a recoverable error state instead.
+          setLoadError(true);
+          break;
       }
     } catch {
-      // A genuine read failure surfaces as an explicit error state so screens
-      // can show a recoverable error instead of a misleading empty list.
       setLoadError(true);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [commit]);
 
   useEffect(() => {
     void load();
@@ -160,84 +205,115 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
   const addReport = useCallback(
     async (form: DailyReportFormData): Promise<DailySiteReport> => {
       const timestamp = nowIso();
-      const report = buildReport(
-        form,
-        {
-          id: generateId('report'),
-          referenceNumber: generateReferenceNumber(allReports),
-          status: 'SUBMITTED',
-          isDraft: false,
-          createdAt: timestamp,
-          submittedAt: timestamp,
-        },
-        timestamp,
-      );
-      await persist([report, ...allReports]);
-      return report;
+      let created!: DailySiteReport;
+      await persist((prev) => {
+        created = buildReport(
+          form,
+          {
+            id: generateId('report'),
+            referenceNumber: generateReferenceNumber(prev),
+            status: 'SUBMITTED',
+            isDraft: false,
+            createdAt: timestamp,
+            submittedAt: timestamp,
+          },
+          timestamp,
+        );
+        return [created, ...prev];
+      });
+      return created;
     },
-    [allReports, persist],
+    [persist],
+  );
+
+  const submitReportFromDraft = useCallback(
+    async (form: DailyReportFormData, draftId?: string): Promise<DailySiteReport> => {
+      const timestamp = nowIso();
+      let created!: DailySiteReport;
+      await persist((prev) => {
+        const draft = draftId ? prev.find((r) => r.id === draftId && r.isDraft) : undefined;
+        const withoutDraft = draft ? prev.filter((r) => r.id !== draft.id) : prev;
+        created = buildReport(
+          form,
+          {
+            // Preserve the draft's id and creation time when promoting it.
+            id: draft?.id ?? generateId('report'),
+            referenceNumber: generateReferenceNumber(withoutDraft),
+            status: 'SUBMITTED',
+            isDraft: false,
+            createdAt: draft?.createdAt ?? timestamp,
+            submittedAt: timestamp,
+          },
+          timestamp,
+        );
+        return [created, ...withoutDraft];
+      });
+      return created;
+    },
+    [persist],
   );
 
   const saveDraft = useCallback(
     async (form: DailyReportFormData, draftId?: string): Promise<DailySiteReport> => {
       const timestamp = nowIso();
-      const existing = draftId ? allReports.find((r) => r.id === draftId) : undefined;
-
-      const draft = buildReport(
-        form,
-        {
-          id: existing?.id ?? generateId('draft'),
-          referenceNumber: existing?.referenceNumber ?? '',
-          status: 'DRAFT',
-          isDraft: true,
-          createdAt: existing?.createdAt ?? timestamp,
-        },
-        timestamp,
-      );
-
-      const next = existing
-        ? allReports.map((r) => (r.id === existing.id ? draft : r))
-        : [draft, ...allReports];
-      await persist(next);
+      let draft!: DailySiteReport;
+      await persist((prev) => {
+        const existing = draftId ? prev.find((r) => r.id === draftId) : undefined;
+        draft = buildReport(
+          form,
+          {
+            id: existing?.id ?? generateId('draft'),
+            referenceNumber: existing?.referenceNumber ?? '',
+            status: 'DRAFT',
+            isDraft: true,
+            createdAt: existing?.createdAt ?? timestamp,
+          },
+          timestamp,
+        );
+        return existing
+          ? prev.map((r) => (r.id === existing.id ? draft : r))
+          : [draft, ...prev];
+      });
       return draft;
     },
-    [allReports, persist],
+    [persist],
   );
 
   const updateReport = useCallback(
     async (id: string, updates: Partial<DailySiteReport>): Promise<void> => {
-      const next = allReports.map((report) =>
-        report.id === id ? { ...report, ...updates, updatedAt: nowIso() } : report,
+      await persist((prev) =>
+        prev.map((report) =>
+          report.id === id ? { ...report, ...updates, updatedAt: nowIso() } : report,
+        ),
       );
-      await persist(next);
     },
-    [allReports, persist],
+    [persist],
   );
 
   const deleteDraft = useCallback(
     async (id: string): Promise<void> => {
-      const next = allReports.filter((r) => !(r.id === id && r.isDraft));
-      await persist(next);
+      await persist((prev) => prev.filter((r) => !(r.id === id && r.isDraft)));
     },
-    [allReports, persist],
+    [persist],
   );
 
   const markReportStatus = useCallback(
     async (id: string, status: DailyReportStatus): Promise<void> => {
       const timestamp = nowIso();
-      const next = allReports.map((report) => {
-        if (report.id !== id) return report;
-        return {
-          ...report,
-          status,
-          isDraft: status === 'DRAFT',
-          approvedAt: status === 'APPROVED' ? timestamp : report.approvedAt,
-          updatedAt: timestamp,
-        };
-      });
-      await persist(next);
+      await persist((prev) =>
+        prev.map((report) => {
+          if (report.id !== id) return report;
+          return {
+            ...report,
+            status,
+            isDraft: status === 'DRAFT',
+            approvedAt: status === 'APPROVED' ? timestamp : report.approvedAt,
+            updatedAt: timestamp,
+          };
+        }),
+      );
     },
-    [allReports, persist],
+    [persist],
   );
 
   const getReportById = useCallback(
@@ -291,6 +367,7 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
       isLoading,
       loadError,
       addReport,
+      submitReportFromDraft,
       saveDraft,
       updateReport,
       deleteDraft,
@@ -309,6 +386,7 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
       isLoading,
       loadError,
       addReport,
+      submitReportFromDraft,
       saveDraft,
       updateReport,
       deleteDraft,

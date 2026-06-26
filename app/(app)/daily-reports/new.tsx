@@ -132,7 +132,7 @@ export default function NewDailyReportScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ draftId?: string; projectId?: string; date?: string }>();
 
-  const { addReport, saveDraft, deleteDraft, getReportById, reports } = useDailyReports();
+  const { submitReportFromDraft, saveDraft, getReportById, reports } = useDailyReports();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<DailyReportFormData>(createInitialForm);
@@ -396,13 +396,9 @@ export default function NewDailyReportScreen() {
 
     setIsSaving(true);
     try {
-      if (draftId) {
-        const draft = getReportById(draftId);
-        if (draft?.isDraft) {
-          await deleteDraft(draftId);
-        }
-      }
-      const created = await addReport(form);
+      // Atomically replace the originating draft (if any) with the submitted
+      // report in a single update + persist, so no stale draft can resurrect.
+      const created = await submitReportFromDraft(form, draftId);
       committedRef.current = true;
       router.replace({ pathname: '/daily-reports/[id]', params: { id: created.id } });
     } catch {

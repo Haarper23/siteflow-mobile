@@ -12,6 +12,7 @@ import {
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import type { IssuePhoto } from '@/src/types/issue';
+import { persistPickedImage } from '@/src/utils/persistImages';
 import { colors } from '@/src/theme/colors';
 
 const DEFAULT_MAX_PHOTOS = 5;
@@ -44,14 +45,40 @@ export default function PhotoPickerSection({
   maxPhotos = DEFAULT_MAX_PHOTOS,
 }: PhotoPickerSectionProps) {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  // Ids of photos whose underlying file failed to load (e.g. a legacy temporary
+  // URI that the OS purged). Tracked so we can show a safe fallback tile rather
+  // than a broken image.
+  const [brokenIds, setBrokenIds] = useState<string[]>([]);
 
   const remaining = maxPhotos - photos.length;
   const atLimit = remaining <= 0;
 
-  const addAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
-    const next = assets.slice(0, remaining).map(assetToPhoto);
+  const markBroken = (id: string) => {
+    setBrokenIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const addAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    const slice = assets.slice(0, remaining);
+    const next: IssuePhoto[] = [];
+    let anyFailed = false;
+    for (const asset of slice) {
+      try {
+        // Copy into app-owned storage so the evidence survives relaunch.
+        const storedUri = await persistPickedImage(asset.uri);
+        next.push({ ...assetToPhoto(asset), uri: storedUri });
+      } catch {
+        anyFailed = true;
+      }
+    }
     if (next.length > 0) {
       onChange([...photos, ...next]);
+    }
+    if (anyFailed) {
+      // Generic, path-free message (see security rules).
+      Alert.alert(
+        'Photo not saved',
+        'Some photos could not be saved to this device. Please try again.',
+      );
     }
   };
 
@@ -83,7 +110,7 @@ export default function PhotoPickerSection({
       });
 
       if (!result.canceled) {
-        addAssets(result.assets);
+        await addAssets(result.assets);
       }
     } catch {
       Alert.alert('Camera error', 'The camera could not be opened. Please try again.');
@@ -113,7 +140,7 @@ export default function PhotoPickerSection({
       });
 
       if (!result.canceled) {
-        addAssets(result.assets);
+        await addAssets(result.assets);
       }
     } catch {
       Alert.alert('Library error', 'The photo library could not be opened. Please try again.');
@@ -159,25 +186,46 @@ export default function PhotoPickerSection({
 
       {photos.length > 0 ? (
         <View style={styles.grid}>
-          {photos.map((photo) => (
-            <View key={photo.id} style={styles.thumbWrapper}>
-              <TouchableOpacity
-                onPress={() => setPreviewUri(photo.uri)}
-                activeOpacity={0.85}
-                accessibilityLabel="Preview photo"
-              >
-                <Image source={{ uri: photo.uri }} style={styles.thumb} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => removePhoto(photo.id)}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                accessibilityLabel="Remove photo"
-              >
-                <Ionicons name="close" size={14} color={colors.white} />
-              </TouchableOpacity>
-            </View>
-          ))}
+          {photos.map((photo) => {
+            const broken = brokenIds.includes(photo.id);
+            return (
+              <View key={photo.id} style={styles.thumbWrapper}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!broken) setPreviewUri(photo.uri);
+                  }}
+                  activeOpacity={0.85}
+                  disabled={broken}
+                  accessibilityLabel={broken ? 'Photo unavailable' : 'Preview photo'}
+                >
+                  {broken ? (
+                    <View style={[styles.thumb, styles.thumbBroken]}>
+                      <MaterialCommunityIcons
+                        name="image-off-outline"
+                        size={22}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.thumbBrokenText}>Unavailable</Text>
+                    </View>
+                  ) : (
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.thumb}
+                      onError={() => markBroken(photo.id)}
+                    />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => removePhoto(photo.id)}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityLabel="Remove photo"
+                >
+                  <Ionicons name="close" size={14} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
       ) : (
         <View style={styles.emptyNote}>
@@ -270,6 +318,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  thumbBroken: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderStyle: 'dashed',
+  },
+  thumbBrokenText: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   removeButton: {
     position: 'absolute',
