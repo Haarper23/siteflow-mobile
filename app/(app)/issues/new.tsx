@@ -291,6 +291,10 @@ export default function NewIssueScreen() {
       committedRef.current = true;
       Alert.alert('Draft saved', 'You can continue editing this report later from the Issues list.');
       router.replace('/issues');
+    } catch {
+      // Generic, safe message — keep the user on the form so their input is not
+      // lost. No internal error detail is surfaced (see security rules).
+      Alert.alert('Save failed', 'We could not save this draft. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -341,6 +345,9 @@ export default function NewIssueScreen() {
       const created = await addIssue(payload);
       committedRef.current = true;
       router.replace({ pathname: '/issues/[id]', params: { id: created.id } });
+    } catch {
+      // Generic, safe message — leave the form editable so the report is not lost.
+      Alert.alert('Submit failed', 'We could not submit this issue. Please try again.');
     } finally {
       setIsSaving(false);
     }

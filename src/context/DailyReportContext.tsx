@@ -57,6 +57,7 @@ interface DailyReportContextValue {
   reports: DailySiteReport[];
   drafts: DailySiteReport[];
   isLoading: boolean;
+  loadError: boolean;
   addReport: (form: DailyReportFormData) => Promise<DailySiteReport>;
   saveDraft: (form: DailyReportFormData, draftId?: string) => Promise<DailySiteReport>;
   updateReport: (id: string, updates: Partial<DailySiteReport>) => Promise<void>;
@@ -124,6 +125,7 @@ function buildReport(
 export function DailyReportProvider({ children }: { children: React.ReactNode }) {
   const [allReports, setAllReports] = useState<DailySiteReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const persist = useCallback(async (next: DailySiteReport[]): Promise<void> => {
     setAllReports(next);
@@ -132,15 +134,23 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    const stored = await loadDailyReports();
-    if (stored === null) {
-      // First launch: seed once. The null guard prevents re-seeding over user data.
-      setAllReports(MOCK_DAILY_REPORTS);
-      await saveDailyReports(MOCK_DAILY_REPORTS);
-    } else {
-      setAllReports(stored);
+    setLoadError(false);
+    try {
+      const stored = await loadDailyReports();
+      if (stored === null) {
+        // First launch: seed once. The null guard prevents re-seeding over user data.
+        setAllReports(MOCK_DAILY_REPORTS);
+        await saveDailyReports(MOCK_DAILY_REPORTS);
+      } else {
+        setAllReports(stored);
+      }
+    } catch {
+      // A genuine read failure surfaces as an explicit error state so screens
+      // can show a recoverable error instead of a misleading empty list.
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -279,6 +289,7 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
       reports,
       drafts,
       isLoading,
+      loadError,
       addReport,
       saveDraft,
       updateReport,
@@ -296,6 +307,7 @@ export function DailyReportProvider({ children }: { children: React.ReactNode })
       reports,
       drafts,
       isLoading,
+      loadError,
       addReport,
       saveDraft,
       updateReport,

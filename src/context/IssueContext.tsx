@@ -58,6 +58,7 @@ interface IssueContextValue {
   issues: ConstructionIssue[];
   drafts: ConstructionIssue[];
   isLoading: boolean;
+  loadError: boolean;
   addIssue: (form: IssueFormData) => Promise<ConstructionIssue>;
   saveDraft: (input: IssueDraftInput, draftId?: string) => Promise<ConstructionIssue>;
   updateIssue: (id: string, updates: Partial<ConstructionIssue>) => Promise<void>;
@@ -76,6 +77,7 @@ const OPEN_STATUSES: IssueStatus[] = ['OPEN', 'IN_PROGRESS', 'WAITING_APPROVAL']
 export function IssueProvider({ children }: { children: React.ReactNode }) {
   const [allIssues, setAllIssues] = useState<ConstructionIssue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Persist helper: update React state and AsyncStorage together so the two
   // never drift apart. Storage failures are handled inside saveIssues.
@@ -89,16 +91,24 @@ export function IssueProvider({ children }: { children: React.ReactNode }) {
 
   const load = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    const stored = await loadIssues();
-    if (stored === null) {
-      // First launch: seed the store once. Guarded by the null check so we
-      // never re-seed over user data on subsequent launches.
-      setAllIssues(MOCK_ISSUES);
-      await saveIssues(MOCK_ISSUES);
-    } else {
-      setAllIssues(stored);
+    setLoadError(false);
+    try {
+      const stored = await loadIssues();
+      if (stored === null) {
+        // First launch: seed the store once. Guarded by the null check so we
+        // never re-seed over user data on subsequent launches.
+        setAllIssues(MOCK_ISSUES);
+        await saveIssues(MOCK_ISSUES);
+      } else {
+        setAllIssues(stored);
+      }
+    } catch {
+      // A genuine read failure surfaces as an explicit error state so screens
+      // can show a recoverable error instead of a misleading empty list.
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -239,6 +249,7 @@ export function IssueProvider({ children }: { children: React.ReactNode }) {
       issues,
       drafts,
       isLoading,
+      loadError,
       addIssue,
       saveDraft,
       updateIssue,
@@ -253,6 +264,7 @@ export function IssueProvider({ children }: { children: React.ReactNode }) {
       issues,
       drafts,
       isLoading,
+      loadError,
       addIssue,
       saveDraft,
       updateIssue,
