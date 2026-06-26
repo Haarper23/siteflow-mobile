@@ -12,7 +12,7 @@ import { colors } from '@/src/theme/colors';
  */
 export function AuthLoadingScreen() {
   return (
-    <LinearGradient colors={['#0E131A', colors.background]} style={styles.container}>
+    <LinearGradient colors={[colors.gradientTop, colors.background]} style={styles.container}>
       <View style={styles.center}>
         <BrandLogo variant="large" />
       </View>

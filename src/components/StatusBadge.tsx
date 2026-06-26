@@ -10,7 +10,7 @@ interface StatusConfig {
 
 const STATUS_MAP: Record<ProjectStatus, StatusConfig> = {
   ON_TRACK: { label: 'On Track', color: colors.success },
-  AT_RISK: { label: 'At Risk', color: '#F5A623' },
+  AT_RISK: { label: 'At Risk', color: colors.atRisk },
   DELAYED: { label: 'Delayed', color: colors.danger },
   COMPLETED: { label: 'Completed', color: colors.textSecondary },
 };

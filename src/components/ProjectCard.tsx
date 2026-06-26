@@ -20,7 +20,7 @@ function getAccentColor(status: ProjectStatus): string {
     case 'ON_TRACK':
       return colors.success;
     case 'AT_RISK':
-      return '#F5A623';
+      return colors.atRisk;
     case 'DELAYED':
       return colors.danger;
     case 'COMPLETED':

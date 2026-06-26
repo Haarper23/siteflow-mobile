@@ -5,6 +5,7 @@ import { colors } from '@/src/theme/colors';
 import { ScreenError } from '@/src/components/ScreenError';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { AuthLoadingScreen } from '@/src/components/AuthLoadingScreen';
+import { useReducedMotion } from '@/src/hooks/useReducedMotion';
 
 /**
  * Root error boundary. Expo Router renders this automatically when any screen
@@ -55,6 +56,7 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  const reduceMotion = useReducedMotion();
 
   if (isLoading) {
     return <AuthLoadingScreen />;
@@ -65,7 +67,7 @@ function RootNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: 'fade',
+        animation: reduceMotion ? 'none' : 'fade',
       }}
     >
       <Stack.Screen name="index" />

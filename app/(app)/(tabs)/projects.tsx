@@ -84,7 +84,7 @@ export default function ProjectsScreen() {
           </View>
           <View style={styles.summarySep} />
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: '#F5A623' }]}>{AT_RISK_COUNT}</Text>
+            <Text style={[styles.summaryValue, { color: colors.atRisk }]}>{AT_RISK_COUNT}</Text>
             <Text style={styles.summaryLabel}>At Risk</Text>
           </View>
           <View style={styles.summarySep} />
@@ -108,7 +108,12 @@ export default function ProjectsScreen() {
             returnKeyType="search"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => setSearch('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
