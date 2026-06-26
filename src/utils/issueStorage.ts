@@ -1,45 +1,29 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ConstructionIssue } from '@/src/types/issue';
+import { parseStoredIssues } from '@/src/utils/validateStored';
+import {
+  clearCollection,
+  loadCollection,
+  saveCollection,
+  type StorageLoadResult,
+} from '@/src/utils/storageCore';
 
 export const ISSUES_STORAGE_KEY = 'siteflow_ai_issues_v1';
 
 /**
- * Loads persisted issues from AsyncStorage.
- * Returns null when nothing has been stored yet (so the caller can seed),
- * and an empty array when the stored value is present but unreadable.
+ * Loads persisted issues, validating every element and recognising both the
+ * legacy bare-array format and the current versioned envelope. See
+ * {@link StorageLoadResult} for the meaning of each returned state.
  */
-export async function loadIssues(): Promise<ConstructionIssue[] | null> {
-  try {
-    const raw = await AsyncStorage.getItem(ISSUES_STORAGE_KEY);
-    if (raw === null) return null;
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed as ConstructionIssue[];
-  } catch {
-    // Corrupted JSON or storage failure — fall back to a safe empty list
-    // rather than crashing the app on startup.
-    return [];
-  }
+export function loadIssues(): Promise<StorageLoadResult<ConstructionIssue>> {
+  return loadCollection(ISSUES_STORAGE_KEY, parseStoredIssues);
 }
 
-/** Persists the full issue collection. Errors are swallowed to avoid crashes. */
-export async function saveIssues(issues: ConstructionIssue[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(ISSUES_STORAGE_KEY, JSON.stringify(issues));
-  } catch {
-    // Persisting failed (e.g. quota). The in-memory state remains correct;
-    // we simply could not write to disk this time.
-  }
+/** Persists the full issue collection. Rejects if the write fails. */
+export function saveIssues(issues: ConstructionIssue[]): Promise<void> {
+  return saveCollection(ISSUES_STORAGE_KEY, issues);
 }
 
 /** Removes all stored issues. Intended for explicit user actions / debugging only. */
-export async function clearIssues(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(ISSUES_STORAGE_KEY);
-  } catch {
-    // Ignore — there is nothing useful to do if removal fails.
-  }
+export function clearIssues(): Promise<void> {
+  return clearCollection(ISSUES_STORAGE_KEY);
 }

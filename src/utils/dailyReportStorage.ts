@@ -1,44 +1,29 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DailySiteReport } from '@/src/types/dailyReport';
+import { parseStoredReports } from '@/src/utils/validateStored';
+import {
+  clearCollection,
+  loadCollection,
+  saveCollection,
+  type StorageLoadResult,
+} from '@/src/utils/storageCore';
 
 export const DAILY_REPORTS_STORAGE_KEY = 'siteflow_ai_daily_reports_v1';
 
 /**
- * Loads persisted daily reports from AsyncStorage.
- * Returns null when nothing has been stored yet (so the caller can seed),
- * and an empty array when the stored value is present but unreadable.
+ * Loads persisted daily reports, validating every element and recognising both
+ * the legacy bare-array format and the current versioned envelope. See
+ * {@link StorageLoadResult} for the meaning of each returned state.
  */
-export async function loadDailyReports(): Promise<DailySiteReport[] | null> {
-  try {
-    const raw = await AsyncStorage.getItem(DAILY_REPORTS_STORAGE_KEY);
-    if (raw === null) return null;
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed as DailySiteReport[];
-  } catch {
-    // Corrupted JSON or storage failure — fall back to a safe empty list
-    // rather than crashing the app on startup.
-    return [];
-  }
+export function loadDailyReports(): Promise<StorageLoadResult<DailySiteReport>> {
+  return loadCollection(DAILY_REPORTS_STORAGE_KEY, parseStoredReports);
 }
 
-/** Persists the full daily report collection. Errors are swallowed to avoid crashes. */
-export async function saveDailyReports(reports: DailySiteReport[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(DAILY_REPORTS_STORAGE_KEY, JSON.stringify(reports));
-  } catch {
-    // Persisting failed (e.g. quota). The in-memory state remains correct.
-  }
+/** Persists the full daily report collection. Rejects if the write fails. */
+export function saveDailyReports(reports: DailySiteReport[]): Promise<void> {
+  return saveCollection(DAILY_REPORTS_STORAGE_KEY, reports);
 }
 
 /** Removes all stored daily reports. Intended for explicit user actions / debugging only. */
-export async function clearDailyReports(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(DAILY_REPORTS_STORAGE_KEY);
-  } catch {
-    // Ignore — nothing useful to do if removal fails.
-  }
+export function clearDailyReports(): Promise<void> {
+  return clearCollection(DAILY_REPORTS_STORAGE_KEY);
 }
