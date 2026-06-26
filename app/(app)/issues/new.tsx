@@ -592,7 +592,8 @@ export default function NewIssueScreen() {
       <View style={styles.noteBox}>
         <MaterialCommunityIcons name="information-outline" size={16} color={colors.textSecondary} />
         <Text style={styles.noteText}>
-          The responsible team will receive a notification after backend integration.
+          Assigned teams will be notified once backend integration is available. Issues are
+          currently saved on this device.
         </Text>
       </View>
     </View>

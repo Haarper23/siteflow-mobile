@@ -115,8 +115,8 @@ export default function ReportScreen() {
         <View style={styles.infoBox}>
           <MaterialCommunityIcons name="information-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.infoText}>
-            Reports are synced to the project management server once submitted. Photos and attachments
-            will be available in a future update.
+            Reports are saved on this device. Server sync and attachments will arrive in a future
+            update.
           </Text>
         </View>
       </ScrollView>
