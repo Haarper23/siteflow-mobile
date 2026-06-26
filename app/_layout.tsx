@@ -3,6 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/src/theme/colors';
 import { ScreenError } from '@/src/components/ScreenError';
+import { AuthProvider, useAuth } from '@/src/context/AuthContext';
+import { AuthLoadingScreen } from '@/src/components/AuthLoadingScreen';
 
 /**
  * Root error boundary. Expo Router renders this automatically when any screen
@@ -27,14 +29,52 @@ export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'fade',
-        }}
-      />
+      <AuthProvider>
+        <StatusBar style="light" />
+        <RootNavigator />
+      </AuthProvider>
     </SafeAreaProvider>
+  );
+}
+
+/**
+ * Declares the protected/public split using Expo Router's `Stack.Protected`
+ * (the SDK 54 protected-routes API). While the session is being restored we
+ * render a branded loading state instead of the navigator, so no protected or
+ * login content can flash and no navigation runs before the navigator mounts.
+ *
+ * - When authenticated, the `(app)` group is mounted and `(auth)` is removed —
+ *   a logged-in demo user cannot stay on `/login`.
+ * - When signed out, `(app)` is removed entirely (its providers/screens never
+ *   mount), so a deep link to a protected route reveals nothing and is
+ *   redirected to the always-available `index`, which sends the user to
+ *   `/login`.
+ *
+ * Security: this is a client-side, local-session boundary only — real
+ * authorization must be enforced by the future backend.
+ */
+function RootNavigator() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <AuthLoadingScreen />;
+  }
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+        animation: 'fade',
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Protected guard={isAuthenticated}>
+        <Stack.Screen name="(app)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!isAuthenticated}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
   );
 }

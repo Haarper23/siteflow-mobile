@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/src/theme/colors';
+import { useAuth } from '@/src/context/AuthContext';
 
 type SettingsIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -27,21 +28,25 @@ function handleSettingPress(label: string) {
   ]);
 }
 
-function handleLogout() {
-  Alert.alert('Sign Out', 'Are you sure you want to sign out of SiteFlow AI?', [
-    { text: 'Cancel', style: 'cancel' },
-    {
-      text: 'Sign Out',
-      style: 'destructive',
-      onPress: () => {
-        router.replace('/login');
-      },
-    },
-  ]);
-}
-
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out of SiteFlow AI?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => {
+          // Clear the local demo session, then return to login. `signOut` always
+          // resolves (it clears in-memory auth even if secure deletion fails),
+          // so navigation is guaranteed. Business records are left untouched.
+          void signOut().then(() => router.replace('/login'));
+        },
+      },
+    ]);
+  };
 
   return (
     <ScrollView
