@@ -13,6 +13,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DailyReportCard from '@/src/components/DailyReportCard';
 import EmptyState from '@/src/components/EmptyState';
+import { ScreenError } from '@/src/components/ScreenError';
 import { colors } from '@/src/theme/colors';
 import { PROJECTS } from '@/src/data/projects';
 import { useDailyReports } from '@/src/context/DailyReportContext';
@@ -67,7 +68,8 @@ function SummaryTile({ label, value, color }: SummaryTileProps) {
 export default function DailyReportsListScreen() {
   const insets = useSafeAreaInsets();
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
-  const { reports, drafts, getTotalWorkersForDate } = useDailyReports();
+  const { reports, drafts, getTotalWorkersForDate, loadError, refreshReports } =
+    useDailyReports();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
@@ -283,6 +285,18 @@ export default function DailyReportsListScreen() {
       </View>
     </View>
   );
+
+  if (loadError) {
+    return (
+      <ScreenError
+        title="Couldn't load reports"
+        message="Your saved daily reports could not be read. Please try again."
+        onRetry={() => {
+          void refreshReports();
+        }}
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>

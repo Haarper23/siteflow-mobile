@@ -357,6 +357,10 @@ export default function NewDailyReportScreen() {
       committedRef.current = true;
       Alert.alert('Draft saved', 'You can continue editing this daily report later.');
       router.replace('/daily-reports');
+    } catch {
+      // Generic, safe message — keep the user on the form so their input is not
+      // lost. No internal error detail is surfaced (see security rules).
+      Alert.alert('Save failed', 'We could not save this draft. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -401,6 +405,9 @@ export default function NewDailyReportScreen() {
       const created = await addReport(form);
       committedRef.current = true;
       router.replace({ pathname: '/daily-reports/[id]', params: { id: created.id } });
+    } catch {
+      // Generic, safe message — leave the form editable so the report is not lost.
+      Alert.alert('Submit failed', 'We could not submit this report. Please try again.');
     } finally {
       setIsSaving(false);
     }

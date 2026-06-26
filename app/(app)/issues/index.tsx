@@ -13,6 +13,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import IssueCard from '@/src/components/IssueCard';
 import EmptyState from '@/src/components/EmptyState';
+import { ScreenError } from '@/src/components/ScreenError';
 import { colors } from '@/src/theme/colors';
 import { PROJECTS } from '@/src/data/projects';
 import { useIssues } from '@/src/context/IssueContext';
@@ -75,7 +76,7 @@ function SummaryTile({ label, value, color }: SummaryTileProps) {
 export default function IssuesListScreen() {
   const insets = useSafeAreaInsets();
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
-  const { issues, drafts } = useIssues();
+  const { issues, drafts, loadError, refreshIssues } = useIssues();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
@@ -263,6 +264,18 @@ export default function IssuesListScreen() {
       </View>
     </View>
   );
+
+  if (loadError) {
+    return (
+      <ScreenError
+        title="Couldn't load issues"
+        message="Your saved issues could not be read. Please try again."
+        onRetry={() => {
+          void refreshIssues();
+        }}
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>
