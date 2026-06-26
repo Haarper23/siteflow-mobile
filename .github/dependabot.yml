@@ -1,0 +1,41 @@
+# Dependabot version updates for SiteFlow AI Mobile.
+#
+# Keeps npm dependencies and GitHub Actions current. Dependabot only opens PRs;
+# it never auto-merges and never runs `npm audit fix`. Major upgrades to the
+# core frameworks (Expo, React, React Native, Expo Router) are intentionally NOT
+# grouped, so each lands as its own PR for manual review against the SDK.
+version: 2
+
+updates:
+  # --- Application dependencies (npm) ---------------------------------------
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: main
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Group only low-risk dev-tooling minor/patch bumps to cut PR noise.
+      # Production deps and ALL major bumps stay as individual PRs.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  # --- GitHub Actions used by the workflows ---------------------------------
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: main
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Group action minor/patch updates; major action bumps stay separate so a
+      # breaking change (e.g. a new checkout major) gets a dedicated review.
+      github-actions-minor:
+        update-types:
+          - minor
+          - patch

@@ -1,0 +1,55 @@
+# CodeQL — static security analysis for the JavaScript/TypeScript codebase.
+#
+# This is an "advanced setup" CodeQL workflow. If GitHub's *default* CodeQL
+# setup is also enabled for this repository, the two conflict and analysis runs
+# fail. Enable only one. See docs/security/github-repository-hardening.md.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly catch-all scan (Mondays 06:00 UTC) so advisories landing in the
+    # query packs are picked up even without new commits.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+# Least privilege: read source + read Actions metadata, and write code-scanning
+# results. No broader repository write access.
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only the language actually present in this repo. JS and TS are a
+        # single CodeQL language; there is no compiled language to add.
+        language: [javascript-typescript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          languages: ${{ matrix.language }}
+          # JS/TS is interpreted: CodeQL scans the source directly with no build.
+          build-mode: none
+          # Broader coverage than the default suite, at some extra runtime.
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          category: "/language:${{ matrix.language }}"

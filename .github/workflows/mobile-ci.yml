@@ -1,0 +1,93 @@
+# Mobile CI — quality and security gate for SiteFlow AI Mobile.
+#
+# Runs the project's existing verification commands on every pull request to
+# `main`, every push to `main`, and on demand. It does not build, publish, sign,
+# or deploy anything, and it never needs a repository secret or an Expo token.
+#
+# Action supply-chain hardening: third-party actions are pinned to a full,
+# immutable commit SHA. The trailing comment records the human-readable release
+# the SHA corresponds to so maintainers (and Dependabot) can keep it current.
+name: Mobile CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel an in-progress run when a newer commit lands on the same branch / PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this job only reads the checked-out source. No write scopes.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (typecheck, lint, test, doctor, export, audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # `.nvmrc` is the single source of truth for the Node version locally
+          # and in CI, so both resolve to the same release. It pins Node 22.13.0
+          # (active LTS), which satisfies Expo SDK 54 and the engine floor that
+          # @testing-library/react-native v14 requires (Node ^22.13.0 || >=24).
+          node-version-file: .nvmrc
+          # Deterministic, lockfile-keyed npm cache built into setup-node — no
+          # third-party caching action needed.
+          cache: npm
+
+      - name: Install dependencies (deterministic)
+        # `npm ci` installs exactly what package-lock.json pins and fails if the
+        # lockfile is out of sync. Never `npm install` in CI.
+        run: npm ci
+
+      - name: Test with coverage
+        # Runs the full Jest suite serially and collects coverage. No
+        # --passWithNoTests / --forceExit: a missing or hanging suite must fail.
+        run: npm run test:coverage -- --runInBand
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Expo Doctor
+        # expo-doctor ships as a standalone diagnostic decoupled from the SDK;
+        # the Expo docs invoke it via `npx expo-doctor@latest`. `--yes` keeps npx
+        # non-interactive in CI. It only reads the project; it changes nothing.
+        run: npx --yes expo-doctor@latest --verbose
+
+      - name: Web export
+        # Confirms the production web bundle actually builds.
+        run: npx expo export --platform web
+
+      - name: Dependency audit (high and critical only)
+        # Fails the build only when a HIGH or CRITICAL advisory is present. The
+        # current tree has only MODERATE transitive dev/build-tool advisories
+        # (audit M5), which are documented and intentionally not gated here.
+        # No `|| true`, no `audit fix` — this is a real, non-bypassed gate.
+        run: npm audit --audit-level=high
+
+      - name: Upload coverage report
+        # Coverage summary/lcov only. Never node_modules, dist, .env, SecureStore
+        # data, or fixtures. Uploaded even on failure (but not on cancellation)
+        # so a failing run is still diagnosable.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: warn
+          retention-days: 14
