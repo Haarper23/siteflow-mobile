@@ -1,0 +1,40 @@
+# Dependency Review — blocks pull requests that introduce vulnerable dependencies.
+#
+# Uses GitHub's first-party dependency-review-action, which diffs the
+# dependency manifest/lockfile changed by the PR and flags newly INTRODUCED
+# vulnerable packages. It does not gate pre-existing advisories, so the
+# documented moderate dev-tool advisories already in the tree are unaffected.
+#
+# Availability: dependency review requires the GitHub Dependency Graph. It is
+# available on public repositories and on private repositories with GitHub
+# Advanced Security. On a private repo without GHAS the action will fail with a
+# clear message — see docs/security/github-repository-hardening.md.
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: read the diff only. No PR-comment scope is requested; the
+# action writes its findings to the workflow run summary instead.
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Review PR dependency changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # Practical initial threshold: fail the PR when it introduces a HIGH or
+          # CRITICAL advisory. Tighten to `moderate` later if desired.
+          fail-on-severity: high
+          # Write a Markdown summary into the run's job summary.
+          comment-summary-in-pr: never

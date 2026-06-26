@@ -1,5 +1,7 @@
 # Welcome to your Expo app 👋
 
+[![Mobile CI](https://github.com/Haarper23/siteflow-mobile/actions/workflows/mobile-ci.yml/badge.svg?branch=main)](https://github.com/Haarper23/siteflow-mobile/actions/workflows/mobile-ci.yml)
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
@@ -49,6 +51,33 @@ npm run test:coverage # run with a coverage report
 Tests live in `__tests__/` folders (`utils/`, `storage/`, `context/`,
 `components/`), with shared typed fixtures in `__tests__/fixtures/`. They are
 never placed under `app/`, where Expo Router would treat them as routes.
+
+## Continuous integration
+
+Every pull request to `main` (and every push to `main`) runs the **Mobile CI**
+workflow, which must pass before merge. It mirrors the checks you can run
+locally:
+
+```bash
+npm run test:coverage   # full Jest suite + coverage
+npx tsc --noEmit        # TypeScript
+npm run lint            # ESLint (expo lint)
+npx expo-doctor@latest  # project/dependency health
+npx expo export --platform web   # web bundle builds
+npm audit --audit-level=high     # fails only on high/critical advisories
+```
+
+Run these before pushing so CI stays green. Additional automation:
+
+- **CodeQL** scans JavaScript/TypeScript for security issues on PRs, pushes, and weekly.
+- **Dependency Review** blocks PRs that introduce high/critical-severity dependencies.
+- **Dependabot** opens weekly update PRs for npm packages and GitHub Actions.
+
+Some protections are GitHub **repository settings** that cannot be committed as
+files (branch protection / required checks, secret scanning + push protection,
+Dependabot alerts, default-read-only Actions token). The exact steps for a
+maintainer to enable them are in
+[`docs/security/github-repository-hardening.md`](docs/security/github-repository-hardening.md).
 
 ## Learn more
 
