@@ -38,8 +38,10 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          # Expo SDK 54 requires Node >= 20.19. `.nvmrc` pins the major locally
-          # and in CI so both resolve to the same supported Node 20 LTS line.
+          # `.nvmrc` is the single source of truth for the Node version locally
+          # and in CI, so both resolve to the same release. It pins Node 22.13.0
+          # (active LTS), which satisfies Expo SDK 54 and the engine floor that
+          # @testing-library/react-native v14 requires (Node ^22.13.0 || >=24).
           node-version-file: .nvmrc
           # Deterministic, lockfile-keyed npm cache built into setup-node — no
           # third-party caching action needed.
