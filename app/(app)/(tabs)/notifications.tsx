@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/src/theme/colors';
-import { NOTIFICATIONS } from '@/src/data/notifications';
+import { useNotifications } from '@/src/context/NotificationContext';
 import type { Notification, NotificationType } from '@/src/types/notification';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -59,13 +59,9 @@ function NotificationItem({ notification }: NotificationItemProps) {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const [notifications, setNotifications] = useState<Notification[]>(NOTIFICATIONS);
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
+  // Read-state is held in a persistent context so "mark all read" survives
+  // navigation and relaunch, and the tab badge stays in sync (M3).
+  const { notifications, unreadCount, markAllRead } = useNotifications();
 
   return (
     <View style={styles.container}>
@@ -81,7 +77,12 @@ export default function NotificationsScreen() {
             )}
           </View>
           {unreadCount > 0 && (
-            <TouchableOpacity onPress={markAllRead} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={() => {
+                void markAllRead();
+              }}
+              activeOpacity={0.7}
+            >
               <Text style={styles.markAllText}>Mark all read</Text>
             </TouchableOpacity>
           )}

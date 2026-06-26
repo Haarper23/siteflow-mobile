@@ -7,6 +7,7 @@ import {
   StyleSheet,
   FlatList,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -68,7 +69,7 @@ function SummaryTile({ label, value, color }: SummaryTileProps) {
 export default function DailyReportsListScreen() {
   const insets = useSafeAreaInsets();
   const { projectId } = useLocalSearchParams<{ projectId?: string }>();
-  const { reports, drafts, getTotalWorkersForDate, loadError, refreshReports } =
+  const { reports, drafts, isLoading, getTotalWorkersForDate, loadError, refreshReports } =
     useDailyReports();
 
   const [search, setSearch] = useState('');
@@ -325,6 +326,14 @@ export default function DailyReportsListScreen() {
         </Text>
       </View>
 
+      {isLoading && allItems.length === 0 ? (
+        // First cold load: show a loading indicator instead of flashing the
+        // empty state before stored reports have hydrated.
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} accessibilityLabel="Loading daily reports" />
+          <Text style={styles.loadingText}>Loading reports…</Text>
+        </View>
+      ) : (
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -367,6 +376,7 @@ export default function DailyReportsListScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       />
+      )}
     </View>
   );
 }
@@ -426,6 +436,17 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   summaryRow: {
     flexDirection: 'row',

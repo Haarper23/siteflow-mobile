@@ -1,6 +1,7 @@
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { IssueProvider } from '@/src/context/IssueContext';
 import { DailyReportProvider } from '@/src/context/DailyReportContext';
+import { NotificationProvider } from '@/src/context/NotificationContext';
 import { colors } from '@/src/theme/colors';
 import { ScreenError } from '@/src/components/ScreenError';
 import { useReducedMotion } from '@/src/hooks/useReducedMotion';
@@ -33,22 +34,24 @@ export default function AppLayout() {
   return (
     <IssueProvider>
       <DailyReportProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
-            animation: slide,
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
-          <Stack.Screen name="projects/[id]" options={{ animation: slide }} />
-          <Stack.Screen name="issues/index" options={{ animation: slide }} />
-          <Stack.Screen name="issues/new" options={{ animation: present }} />
-          <Stack.Screen name="issues/[id]" options={{ animation: slide }} />
-          <Stack.Screen name="daily-reports/index" options={{ animation: slide }} />
-          <Stack.Screen name="daily-reports/new" options={{ animation: present }} />
-          <Stack.Screen name="daily-reports/[id]" options={{ animation: slide }} />
-        </Stack>
+        <NotificationProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.background },
+              animation: slide,
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
+            <Stack.Screen name="projects/[id]" options={{ animation: slide }} />
+            <Stack.Screen name="issues/index" options={{ animation: slide }} />
+            <Stack.Screen name="issues/new" options={{ animation: present }} />
+            <Stack.Screen name="issues/[id]" options={{ animation: slide }} />
+            <Stack.Screen name="daily-reports/index" options={{ animation: slide }} />
+            <Stack.Screen name="daily-reports/new" options={{ animation: present }} />
+            <Stack.Screen name="daily-reports/[id]" options={{ animation: slide }} />
+          </Stack>
+        </NotificationProvider>
       </DailyReportProvider>
     </IssueProvider>
   );

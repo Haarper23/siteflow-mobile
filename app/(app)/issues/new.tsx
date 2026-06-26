@@ -114,6 +114,11 @@ export default function NewIssueScreen() {
   const committedRef = useRef(false);
   const initializedRef = useRef(false);
 
+  // Synchronous re-entrancy guard for the persistence handlers. `isSaving` only
+  // updates on the next render, so two taps in the same frame can both pass a
+  // state-based check; the ref is set before the first await to close that race.
+  const submittingRef = useRef(false);
+
   // One-time initialisation from route params / existing draft.
   useEffect(() => {
     if (initializedRef.current) return;
@@ -283,7 +288,10 @@ export default function NewIssueScreen() {
   });
 
   const handleSaveDraft = async () => {
-    if (isSaving) return;
+    // Engage the synchronous guard before any await; release it in `finally`
+    // so a recoverable failure leaves the form usable for a retry.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSaving(true);
     try {
       const saved = await saveDraft(buildDraftInput(), draftId);
@@ -296,43 +304,47 @@ export default function NewIssueScreen() {
       // lost. No internal error detail is surfaced (see security rules).
       Alert.alert('Save failed', 'We could not save this draft. Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSaving(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (isSaving) return;
-
-    // Validate every step that has requirements.
-    for (const target of [0, 1, 3]) {
-      const stepErrors = validateStep(target);
-      if (Object.keys(stepErrors).length > 0) {
-        setErrors(stepErrors);
-        setStep(target);
-        return;
-      }
-    }
-
-    // All required fields are present, so category and severity are set.
-    if (!form.category || !form.severity) return;
-
-    const payload: IssueFormData = {
-      projectId: form.projectId,
-      blockId: form.blockId,
-      blockName: form.blockName,
-      floor: form.floor.trim(),
-      area: form.area.trim(),
-      category: form.category,
-      title: form.title,
-      description: form.description,
-      severity: form.severity,
-      assignedTeam: form.assignedTeam,
-      dueDate: form.dueDate,
-      photos: form.photos,
-    };
-
+    // Engage the synchronous guard first so a same-frame second tap (which would
+    // still read `isSaving === false`) cannot start a second submit. Validation
+    // returns below run inside the try, so `finally` always releases the guard.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSaving(true);
     try {
+      // Validate every step that has requirements.
+      for (const target of [0, 1, 3]) {
+        const stepErrors = validateStep(target);
+        if (Object.keys(stepErrors).length > 0) {
+          setErrors(stepErrors);
+          setStep(target);
+          return;
+        }
+      }
+
+      // All required fields are present, so category and severity are set.
+      if (!form.category || !form.severity) return;
+
+      const payload: IssueFormData = {
+        projectId: form.projectId,
+        blockId: form.blockId,
+        blockName: form.blockName,
+        floor: form.floor.trim(),
+        area: form.area.trim(),
+        category: form.category,
+        title: form.title,
+        description: form.description,
+        severity: form.severity,
+        assignedTeam: form.assignedTeam,
+        dueDate: form.dueDate,
+        photos: form.photos,
+      };
+
       // Atomically replace the originating draft (if any) with the submitted
       // issue in a single update + persist, so no stale draft can resurrect.
       const created = await submitIssueFromDraft(payload, draftId);
@@ -342,6 +354,7 @@ export default function NewIssueScreen() {
       // Generic, safe message — leave the form editable so the report is not lost.
       Alert.alert('Submit failed', 'We could not submit this issue. Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSaving(false);
     }
   };
