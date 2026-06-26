@@ -34,7 +34,7 @@ interface ProjectCardProps {
   onPress?: () => void;
 }
 
-export default function ProjectCard({ project, compact = false, onPress }: ProjectCardProps) {
+function ProjectCard({ project, compact = false, onPress }: ProjectCardProps) {
   const accent = getAccentColor(project.status);
   const initials = getInitials(project.name);
 
@@ -107,6 +107,11 @@ export default function ProjectCard({ project, compact = false, onPress }: Proje
     </TouchableOpacity>
   );
 }
+
+// Memoized: a list row re-renders only when its own props change, not on every
+// parent render. Props are value/stable-id based, so the default shallow
+// comparison is correct.
+export default React.memo(ProjectCard);
 
 const styles = StyleSheet.create({
   card: {

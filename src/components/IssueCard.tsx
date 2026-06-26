@@ -15,7 +15,7 @@ interface IssueCardProps {
   compact?: boolean;
 }
 
-export default function IssueCard({ issue, projectName, onPress, compact = false }: IssueCardProps) {
+function IssueCard({ issue, projectName, onPress, compact = false }: IssueCardProps) {
   const visual = getCategoryVisual(issue.category);
   const isCritical = issue.severity === 'CRITICAL' && !issue.isDraft;
 
@@ -95,6 +95,11 @@ export default function IssueCard({ issue, projectName, onPress, compact = false
     </TouchableOpacity>
   );
 }
+
+// Memoized: a list row re-renders only when its own props change, not on every
+// parent render. Props are value/stable-id based, so the default shallow
+// comparison is correct.
+export default React.memo(IssueCard);
 
 const styles = StyleSheet.create({
   card: {

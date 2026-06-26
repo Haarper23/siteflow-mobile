@@ -144,6 +144,11 @@ export default function NewDailyReportScreen() {
   const committedRef = useRef(false);
   const initializedRef = useRef(false);
 
+  // Synchronous re-entrancy guard for the persistence handlers. `isSaving` only
+  // updates on the next render, so two taps in the same frame can both pass a
+  // state-based check; the ref is set before the first await to close that race.
+  const submittingRef = useRef(false);
+
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -349,7 +354,10 @@ export default function NewDailyReportScreen() {
   // ---- Persistence ------------------------------------------------------
 
   const handleSaveDraft = async () => {
-    if (isSaving) return;
+    // Engage the synchronous guard before any await; release it in `finally`
+    // so a recoverable failure leaves the form usable for a retry.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSaving(true);
     try {
       const saved = await saveDraft(form, draftId);
@@ -362,40 +370,44 @@ export default function NewDailyReportScreen() {
       // lost. No internal error detail is surfaced (see security rules).
       Alert.alert('Save failed', 'We could not save this draft. Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSaving(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (isSaving) return;
-
-    const invalid = validateForSubmit();
-    if (invalid) {
-      setErrors(invalid.errors);
-      setStep(invalid.step);
-      return;
-    }
-
-    if (duplicateReport) {
-      Alert.alert(
-        'Duplicate report',
-        `A ${duplicateReport.status === 'APPROVED' ? 'approved' : 'submitted'} report already exists for this project on ${formatReportDate(form.reportDate)}.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Open existing',
-            onPress: () => {
-              committedRef.current = true;
-              router.replace({ pathname: '/daily-reports/[id]', params: { id: duplicateReport.id } });
-            },
-          },
-        ],
-      );
-      return;
-    }
-
+    // Engage the synchronous guard first so a same-frame second tap (which would
+    // still read `isSaving === false`) cannot start a second submit. The early
+    // returns below run inside the try, so `finally` always releases the guard.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSaving(true);
     try {
+      const invalid = validateForSubmit();
+      if (invalid) {
+        setErrors(invalid.errors);
+        setStep(invalid.step);
+        return;
+      }
+
+      if (duplicateReport) {
+        Alert.alert(
+          'Duplicate report',
+          `A ${duplicateReport.status === 'APPROVED' ? 'approved' : 'submitted'} report already exists for this project on ${formatReportDate(form.reportDate)}.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open existing',
+              onPress: () => {
+                committedRef.current = true;
+                router.replace({ pathname: '/daily-reports/[id]', params: { id: duplicateReport.id } });
+              },
+            },
+          ],
+        );
+        return;
+      }
+
       // Atomically replace the originating draft (if any) with the submitted
       // report in a single update + persist, so no stale draft can resurrect.
       const created = await submitReportFromDraft(form, draftId);
@@ -405,6 +417,7 @@ export default function NewDailyReportScreen() {
       // Generic, safe message — leave the form editable so the report is not lost.
       Alert.alert('Submit failed', 'We could not submit this report. Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSaving(false);
     }
   };

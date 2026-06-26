@@ -15,7 +15,7 @@ interface DailyReportCardProps {
   compact?: boolean;
 }
 
-export default function DailyReportCard({
+function DailyReportCard({
   report,
   projectName,
   onPress,
@@ -103,6 +103,11 @@ export default function DailyReportCard({
     </TouchableOpacity>
   );
 }
+
+// Memoized: a list row re-renders only when its own props change, not on every
+// parent render. Props are value/stable-id based, so the default shallow
+// comparison is correct.
+export default React.memo(DailyReportCard);
 
 const styles = StyleSheet.create({
   card: {

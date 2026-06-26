@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/src/theme/colors';
+import { useNotifications } from '@/src/context/NotificationContext';
 
 type TabIconProps = {
   name: React.ComponentProps<typeof Ionicons>['name'];
@@ -16,6 +17,8 @@ function TabIcon({ name, focusedName, color, focused, size = 22 }: TabIconProps)
 }
 
 export default function TabsLayout() {
+  const { unreadCount } = useNotifications();
+
   return (
     <Tabs
       initialRouteName="home"
@@ -68,7 +71,9 @@ export default function TabsLayout() {
         name="notifications"
         options={{
           title: 'Alerts',
-          tabBarBadge: 3,
+          // Reflect the live unread count; omit the badge entirely at zero so it
+          // is never a misleading decoration.
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
           tabBarBadgeStyle: styles.badge,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
