@@ -79,6 +79,26 @@ Dependabot alerts, default-read-only Actions token). The exact steps for a
 maintainer to enable them are in
 [`docs/security/github-repository-hardening.md`](docs/security/github-repository-hardening.md).
 
+## Operations
+
+Release, rollback, and monitoring are documented under `docs/`:
+
+- [Release runbook](docs/operations/release-runbook.md) — EAS build/submit
+  profiles, versioning, and the release procedure (build/submit/update are
+  approval-gated and not run automatically).
+- [Mobile release checklist](docs/release/mobile-release-checklist.md) — the
+  pre-release gate to work through before any build or submission.
+- [Rollback plan](docs/release/rollback-plan.md) — how to revert safely (and the
+  real limits of store and OTA rollback).
+- [Monitoring (Sentry) setup](docs/monitoring/sentry-setup.md) — optional,
+  fail-safe crash/error monitoring, its privacy boundaries, and the manual
+  steps to enable it.
+
+> The app currently uses a **local demo session** and **local storage** only —
+> nothing is synced to a backend. Treat releases as demo/pilot builds. Crash
+> monitoring is **off** unless `EXPO_PUBLIC_SENTRY_DSN` is set, and the app runs
+> fully without it.
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

@@ -5,15 +5,25 @@ import { NotificationProvider } from '@/src/context/NotificationContext';
 import { colors } from '@/src/theme/colors';
 import { ScreenError } from '@/src/components/ScreenError';
 import { useReducedMotion } from '@/src/hooks/useReducedMotion';
+import { logger } from '@/src/utils/logger';
+import { getAppVersion, getPlatform } from '@/src/config/env';
 
 /**
  * Route-level boundary for the authenticated data stack. A render error inside
  * a screen here recovers locally via `retry` without unmounting the whole app.
- * Errors not caught here bubble up to the root boundary in `app/_layout.tsx`.
+ * Errors not caught here bubble up to the root boundary in `app/_layout.tsx`;
+ * the same error object is reported at most once (monitoring deduplicates), so
+ * nesting does not double-report.
  *
- * Security: `error` is intentionally not surfaced to the user.
+ * Security: `error` is intentionally not surfaced to the user — it is reported
+ * to monitoring with safe metadata only.
  */
-export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  logger.error('Uncaught render error', error, {
+    boundary: 'app-stack',
+    appVersion: getAppVersion(),
+    platform: getPlatform(),
+  });
   return (
     <ScreenError
       message="This area hit an unexpected problem. Please try again."

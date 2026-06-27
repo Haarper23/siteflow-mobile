@@ -6,16 +6,32 @@ import { ScreenError } from '@/src/components/ScreenError';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { AuthLoadingScreen } from '@/src/components/AuthLoadingScreen';
 import { useReducedMotion } from '@/src/hooks/useReducedMotion';
+import { initializeMonitoring } from '@/src/services/monitoring';
+import { logger } from '@/src/utils/logger';
+import { getAppVersion, getPlatform } from '@/src/config/env';
+
+// Initialise crash/error monitoring once, as early as possible. This is a
+// no-op when no DSN is configured and is wrapped so it can never block startup.
+initializeMonitoring();
 
 /**
  * Root error boundary. Expo Router renders this automatically when any screen
  * below the root throws during render, so a single component error shows a
  * recoverable fallback instead of white-screening the whole app.
  *
- * Security: `error` is intentionally not surfaced — users see generic copy
- * only. `retry` re-renders the failed subtree.
+ * The uncaught error is reported to monitoring once (deduplicated) with only
+ * safe metadata — never the message, stack, route params, or any user content.
+ *
+ * Security: `error` is intentionally not surfaced to the user — they see generic
+ * copy only. `retry` re-renders the failed subtree. Reporting failures never
+ * affect fallback rendering.
  */
-export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  logger.error('Uncaught render error', error, {
+    boundary: 'root',
+    appVersion: getAppVersion(),
+    platform: getPlatform(),
+  });
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />

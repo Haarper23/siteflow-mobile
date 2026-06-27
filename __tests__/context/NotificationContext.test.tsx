@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor, act } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   NotificationProvider,
@@ -32,16 +32,17 @@ function api(): NotificationsApi {
 }
 
 async function mountReady(): Promise<void> {
-  await act(async () => {
-    render(
-      <NotificationProvider>
-        <Capture />
-      </NotificationProvider>,
-    );
-  });
-  // The seed always has at least one unread notification, so once hydration has
-  // settled the provider has produced its notifications.
-  await waitFor(() => expect(api().notifications.length).toBe(NOTIFICATIONS.length));
+  // `render` is async and wraps the mount in its own `act`; awaiting it commits
+  // the tree (wrapping it in another `act` would overlap that scope). The
+  // provider then hydrates persisted read-ids in a mount effect (an async
+  // storage read), so flush that pending work inside a single act before the
+  // test queries the derived unread count.
+  await render(
+    <NotificationProvider>
+      <Capture />
+    </NotificationProvider>,
+  );
+  await act(async () => {});
 }
 
 beforeEach(async () => {
@@ -137,8 +138,10 @@ describe('NotificationProvider', () => {
         <Capture />
       </NotificationProvider>,
     );
-    // Unmount before the async read-ids load resolves.
-    unmount();
+    // Unmount before the async read-ids load resolves. `unmount` is async (it
+    // wraps the teardown in its own act), so await it to avoid overlapping the
+    // flush below.
+    await unmount();
     // Flush the pending load so its (guarded) continuation runs. The `active`
     // flag drops the resolved value; reaching here without an "update on an
     // unmounted component" error is the assertion.
