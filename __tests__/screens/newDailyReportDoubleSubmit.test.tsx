@@ -1,7 +1,29 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { makeReport } from '../fixtures';
+
+type Screen = Awaited<ReturnType<typeof render>>;
+type Instance = ReturnType<Screen['getByText']>;
+type Fiber = { memoizedProps: { onPress?: unknown } | null; return: Fiber | null };
+
+// Resolve a Touchable's `onPress` handler from the React fiber tree, the same
+// way RNTL's own `fireEvent` does: a composite Touchable does not expose
+// `onPress` on the host instance reachable via `.parent`, so we walk the fiber's
+// `return` chain instead. A same-frame double tap must invoke that handler twice
+// inside a *single* act — two `fireEvent.press` calls would each open their own
+// (async) act scope and overlap, which React reports as "overlapping act()".
+function onPressOf(node: Instance): () => void {
+  let fiber: Fiber | null = (node as unknown as { unstable_fiber: Fiber | null }).unstable_fiber;
+  while (fiber) {
+    const handler = fiber.memoizedProps?.onPress;
+    if (typeof handler === 'function') {
+      return handler as () => void;
+    }
+    fiber = fiber.return;
+  }
+  throw new Error('No onPress handler found for the element');
+}
 
 // Double-submission protection for the daily-report wizard (M2). Mirrors the
 // issue-wizard test: the synchronous ref guard must collapse two same-frame
@@ -73,14 +95,13 @@ jest.mock('@/src/context/DailyReportContext', () => {
 const NewDailyReportScreen = require('../../app/(app)/daily-reports/new')
   .default as React.ComponentType;
 
-async function advanceToReview(screen: Awaited<ReturnType<typeof render>>) {
+async function advanceToReview(screen: Screen) {
   // 7 steps: Project → Conditions → Workforce → Progress → Resources → Safety →
-  // Review, i.e. 6 "Continue" presses. Each press is wrapped in act so the step
-  // transition flushes (under the React Compiler) before the next is queried.
+  // Review, i.e. 6 "Continue" presses. `fireEvent` is async and acts
+  // internally, so awaiting each press flushes the step transition before the
+  // next step's button is queried.
   for (let i = 0; i < 6; i += 1) {
-    await act(async () => {
-      fireEvent.press(screen.getByText('Continue'));
-    });
+    await fireEvent.press(screen.getByText('Continue'));
   }
 }
 
@@ -94,11 +115,12 @@ describe('NewDailyReportScreen double-submit protection', () => {
     const screen = await render(<NewDailyReportScreen />);
     await advanceToReview(screen);
 
-    const submitBtn = screen.getByText('Submit Daily Report');
+    const onSubmit = onPressOf(screen.getByText('Submit Daily Report'));
     await act(async () => {
-      // Two presses in the same frame, before the first await resolves.
-      fireEvent.press(submitBtn);
-      fireEvent.press(submitBtn);
+      // Two presses in the same frame, before the first await resolves. The
+      // synchronous ref guard must collapse them into one submit.
+      onSubmit();
+      onSubmit();
     });
 
     expect(mockSubmit).toHaveBeenCalledTimes(1);
@@ -112,9 +134,9 @@ describe('NewDailyReportScreen double-submit protection', () => {
     const screen = await render(<NewDailyReportScreen />);
     await advanceToReview(screen);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit Daily Report'));
-    });
+    await fireEvent.press(screen.getByText('Submit Daily Report'));
+    // The submit rejects asynchronously; wait for the failure to surface.
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
 
     expect(mockSubmit).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
@@ -125,11 +147,9 @@ describe('NewDailyReportScreen double-submit protection', () => {
 
     // Guard released: retry succeeds and navigates exactly once.
     mockSubmit.mockResolvedValueOnce(makeReport({ id: 'created-2' }));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit Daily Report'));
-    });
+    await fireEvent.press(screen.getByText('Submit Daily Report'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
     expect(mockSubmit).toHaveBeenCalledTimes(2);
-    expect(mockReplace).toHaveBeenCalledTimes(1);
 
     alertSpy.mockRestore();
   });

@@ -44,6 +44,11 @@ yarn-error.*
 secrets/
 credentials/
 
+# Sentry build tooling (may contain the auth token — never commit)
+.sentryclirc
+sentry.properties
+.env.sentry-build-plugin
+
 # typescript
 *.tsbuildinfo
 

@@ -43,6 +43,8 @@ module.exports = {
   collectCoverageFrom: [
     'src/utils/**/*.{ts,tsx}',
     'src/context/**/*.{ts,tsx}',
+    'src/config/**/*.{ts,tsx}',
+    'src/services/**/*.{ts,tsx}',
     'src/components/ScreenError.tsx',
     'src/components/IssueStatusBadge.tsx',
     'src/components/SeverityBadge.tsx',

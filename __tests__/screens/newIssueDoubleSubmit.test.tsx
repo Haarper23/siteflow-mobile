@@ -1,7 +1,29 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { makeIssue } from '../fixtures';
+
+type Screen = Awaited<ReturnType<typeof render>>;
+type Instance = ReturnType<Screen['getByText']>;
+type Fiber = { memoizedProps: { onPress?: unknown } | null; return: Fiber | null };
+
+// Resolve a Touchable's `onPress` handler from the React fiber tree, the same
+// way RNTL's own `fireEvent` does: a composite Touchable does not expose
+// `onPress` on the host instance reachable via `.parent`, so we walk the fiber's
+// `return` chain instead. A same-frame double tap must invoke that handler twice
+// inside a *single* act — two `fireEvent.press` calls would each open their own
+// (async) act scope and overlap, which React reports as "overlapping act()".
+function onPressOf(node: Instance): () => void {
+  let fiber: Fiber | null = (node as unknown as { unstable_fiber: Fiber | null }).unstable_fiber;
+  while (fiber) {
+    const handler = fiber.memoizedProps?.onPress;
+    if (typeof handler === 'function') {
+      return handler as () => void;
+    }
+    fiber = fiber.return;
+  }
+  throw new Error('No onPress handler found for the element');
+}
 
 // Double-submission protection for the issue wizard (M2). The fix backs the
 // guard with a synchronous ref set before the first await, so two presses in
@@ -51,14 +73,12 @@ jest.mock('@/src/context/IssueContext', () => {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const NewIssueScreen = require('../../app/(app)/issues/new').default as React.ComponentType;
 
-async function advanceToReview(screen: Awaited<ReturnType<typeof render>>) {
+async function advanceToReview(screen: Screen) {
   // Steps: Location → Details → Evidence → Assignment → Review (4 "Continue"s).
-  // Each press is wrapped in act so the step transition flushes (under the React
-  // Compiler) before the next step is queried.
+  // `fireEvent` is async and acts internally, so awaiting each press flushes the
+  // step transition before the next step's button is queried.
   for (let i = 0; i < 4; i += 1) {
-    await act(async () => {
-      fireEvent.press(screen.getByText('Continue'));
-    });
+    await fireEvent.press(screen.getByText('Continue'));
   }
 }
 
@@ -72,11 +92,12 @@ describe('NewIssueScreen double-submit protection', () => {
     const screen = await render(<NewIssueScreen />);
     await advanceToReview(screen);
 
-    const submitBtn = screen.getByText('Submit Report');
+    const onSubmit = onPressOf(screen.getByText('Submit Report'));
     await act(async () => {
-      // Two synchronous presses before the first await resolves.
-      fireEvent.press(submitBtn);
-      fireEvent.press(submitBtn);
+      // Two synchronous presses in the same frame, before the first await
+      // resolves. The synchronous ref guard must collapse them into one submit.
+      onSubmit();
+      onSubmit();
     });
 
     expect(mockSubmit).toHaveBeenCalledTimes(1);
@@ -90,9 +111,9 @@ describe('NewIssueScreen double-submit protection', () => {
     const screen = await render(<NewIssueScreen />);
     await advanceToReview(screen);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit Report'));
-    });
+    await fireEvent.press(screen.getByText('Submit Report'));
+    // The submit rejects asynchronously; wait for the failure to surface.
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
 
     // Failure: a safe generic error is shown and no navigation happened.
     expect(mockSubmit).toHaveBeenCalledTimes(1);
@@ -106,11 +127,9 @@ describe('NewIssueScreen double-submit protection', () => {
 
     // Guard released: a retry now succeeds and navigates exactly once.
     mockSubmit.mockResolvedValueOnce(makeIssue({ id: 'created-2' }));
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit Report'));
-    });
+    await fireEvent.press(screen.getByText('Submit Report'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
     expect(mockSubmit).toHaveBeenCalledTimes(2);
-    expect(mockReplace).toHaveBeenCalledTimes(1);
 
     alertSpy.mockRestore();
   });
@@ -120,10 +139,10 @@ describe('NewIssueScreen double-submit protection', () => {
     const screen = await render(<NewIssueScreen />);
     await advanceToReview(screen);
 
-    const draftBtn = screen.getByText('Save as Draft');
+    const onSaveDraft = onPressOf(screen.getByText('Save as Draft'));
     await act(async () => {
-      fireEvent.press(draftBtn);
-      fireEvent.press(draftBtn);
+      onSaveDraft();
+      onSaveDraft();
     });
 
     expect(mockSaveDraft).toHaveBeenCalledTimes(1);
